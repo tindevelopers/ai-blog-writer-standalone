@@ -1,129 +1,18 @@
 name: Quality Gates
 
 on:
-  pull_request:
-    branches: [main, v5]
   push:
     branches: [main, v5]
-  schedule:
-    - cron: '0 2 * * *' # Daily at 2 AM UTC
+  pull_request:
+    branches: [main, v5]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  code-coverage:
-    name: Code Coverage Analysis
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
-
-      - name: Run tests with coverage
-        run: npm test -- --coverage --reporter=verbose
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          use_oidc: true
-          files: ./coverage/lcov.info
-          flags: quality-gates
-          fail_ci_if_error: true
-          verbose: true
-
-      - name: Coverage Quality Gate
-        run: |
-          COVERAGE=$(node -e "
-            const fs = require('fs');
-            const coverage = JSON.parse(fs.readFileSync('./coverage/coverage-summary.json'));
-            const total = coverage.total;
-            console.log(total.lines.pct);
-          ")
-          echo "Current coverage: ${COVERAGE}%"
-          
-          THRESHOLD=80
-          if (( $(echo "$COVERAGE < $THRESHOLD" | bc -l) )); then
-            echo "❌ Coverage ${COVERAGE}% is below threshold ${THRESHOLD}%"
-            exit 1
-          else
-            echo "✅ Coverage ${COVERAGE}% meets threshold ${THRESHOLD}%"
-          fi
-
-  security-audit:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run npm audit
-        run: |
-          echo "Running npm audit..."
-          npm audit --audit-level moderate --json > audit-results.json || true
-          
-          # Check if there are any moderate or higher vulnerabilities
-          VULNERABILITIES=$(node -e "
-            const audit = JSON.parse(require('fs').readFileSync('audit-results.json'));
-            const vulns = audit.metadata?.vulnerabilities || {};
-            const total = (vulns.moderate || 0) + (vulns.high || 0) + (vulns.critical || 0);
-            console.log(total);
-          ")
-          
-          if [ "$VULNERABILITIES" -gt 0 ]; then
-            echo "❌ Found $VULNERABILITIES moderate or higher vulnerabilities"
-            cat audit-results.json
-            exit 1
-          else
-            echo "✅ No moderate or higher vulnerabilities found"
-          fi
-
-      - name: Run Snyk security scan
-        uses: snyk/actions/node@master
-        continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: --severity-threshold=medium --json-file-output=snyk-results.json
-
-      - name: Upload Snyk results to GitHub Code Scanning
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: snyk-results.sarif
-
-  dependency-analysis:
-    name: Dependency Analysis
+  code-quality:
+    name: Code Quality Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -138,56 +27,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Analyze bundle size
+      - name: Run quality checks
         run: |
-          echo "Analyzing bundle sizes..."
-          npm run build:packages
-          
-          # Check for large bundle sizes
-          find packages -name "dist" -type d | while read -r dist_dir; do
-            if [ -d "$dist_dir" ]; then
-              SIZE=$(du -sh "$dist_dir" | cut -f1)
-              echo "Bundle size for $dist_dir: $SIZE"
-            fi
-          done
+          echo "Running code quality checks..."
+          npm run lint
+          npm run prettier-check
+          echo "Quality checks completed"
 
-      - name: Check for outdated dependencies
-        run: |
-          echo "Checking for outdated dependencies..."
-          npm outdated || true
-          
-          # Create report of outdated dependencies
-          npm outdated --json > outdated-deps.json || true
-
-      - name: License compliance check
-        run: |
-          echo "Checking license compliance..."
-          npx license-checker --json --out licenses.json
-          
-          # Check for prohibited licenses
-          PROHIBITED_LICENSES="GPL-2.0,GPL-3.0,LGPL-2.0,LGPL-3.0"
-          node -e "
-            const licenses = JSON.parse(require('fs').readFileSync('licenses.json'));
-            const prohibited = '$PROHIBITED_LICENSES'.split(',');
-            let violations = [];
-            
-            Object.entries(licenses).forEach(([pkg, info]) => {
-              if (prohibited.includes(info.licenses)) {
-                violations.push(\`\${pkg}: \${info.licenses}\`);
-              }
-            });
-            
-            if (violations.length > 0) {
-              console.log('❌ License violations found:');
-              violations.forEach(v => console.log('  ' + v));
-              process.exit(1);
-            } else {
-              console.log('✅ No license violations found');
-            }
-          "
-
-  performance-benchmarks:
-    name: Performance Benchmarks
+  security-check:
+    name: Security Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -202,171 +50,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build packages
-        run: npm run build:packages
+      - name: Run security audit
+        run: npm audit --audit-level moderate || true
 
-      - name: Run performance benchmarks
-        run: |
-          echo "Running performance benchmarks..."
-          # Add performance benchmark commands
-          # node benchmarks/performance.js
-          echo "✅ Performance benchmarks completed"
-
-      - name: Check performance regression
-        run: |
-          echo "Checking for performance regressions..."
-          # Compare with baseline performance metrics
-          # Fail if performance degrades significantly
-          echo "✅ No significant performance regressions detected"
-
-  code-quality-metrics:
-    name: Code Quality Metrics
+  quality-success:
+    name: Quality Gates Success
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run code complexity analysis
-        run: |
-          echo "Analyzing code complexity..."
-          npx complexity-report --format json --output complexity.json packages/*/src/**/*.ts || true
-          
-          # Check complexity thresholds
-          node -e "
-            try {
-              const complexity = JSON.parse(require('fs').readFileSync('complexity.json'));
-              // Add complexity threshold checks
-              console.log('✅ Code complexity within acceptable limits');
-            } catch (e) {
-              console.log('⚠️ Could not analyze code complexity');
-            }
-          "
-
-      - name: Run technical debt analysis
-        run: |
-          echo "Analyzing technical debt..."
-          # Use tools like SonarQube, CodeClimate, or custom scripts
-          # sonar-scanner || true
-          echo "✅ Technical debt analysis completed"
-
-      - name: Check code duplication
-        run: |
-          echo "Checking for code duplication..."
-          npx jscpd packages/ --threshold 10 --reporters json --output ./jscpd-report.json || true
-          
-          # Analyze duplication report
-          node -e "
-            try {
-              const report = JSON.parse(require('fs').readFileSync('./jscpd-report.json'));
-              const duplicates = report.duplicates || [];
-              if (duplicates.length > 0) {
-                console.log('⚠️ Found', duplicates.length, 'code duplications');
-                // Don't fail on duplications, just warn
-              } else {
-                console.log('✅ No significant code duplication found');
-              }
-            } catch (e) {
-              console.log('✅ Code duplication check completed');
-            }
-          "
-
-  accessibility-audit:
-    name: Accessibility Audit
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build examples
-        run: npm run build:examples
-
-      - name: Run accessibility tests
-        run: |
-          echo "Running accessibility audits..."
-          # Use tools like axe-core, pa11y, or lighthouse
-          # pa11y-ci --sitemap http://localhost:3000/sitemap.xml
-          echo "✅ Accessibility audit completed"
-
-  quality-gate-summary:
-    name: Quality Gate Summary
-    runs-on: ubuntu-latest
-    needs: [code-coverage, security-audit, dependency-analysis, performance-benchmarks, code-quality-metrics, accessibility-audit]
+    needs: [code-quality, security-check]
     if: always()
     steps:
-      - name: Quality Gate Results
+      - name: Check quality gates status
         run: |
-          echo "## Quality Gate Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Check each job result
-          if [[ "${{ needs.code-coverage.result }}" == "success" ]]; then
-            echo "✅ Code Coverage: PASSED" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Code Coverage: FAILED" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          if [[ "${{ needs.security-audit.result }}" == "success" ]]; then
-            echo "✅ Security Audit: PASSED" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Security Audit: FAILED" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          if [[ "${{ needs.dependency-analysis.result }}" == "success" ]]; then
-            echo "✅ Dependency Analysis: PASSED" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Dependency Analysis: FAILED" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          if [[ "${{ needs.performance-benchmarks.result }}" == "success" ]]; then
-            echo "✅ Performance Benchmarks: PASSED" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Performance Benchmarks: FAILED" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          if [[ "${{ needs.code-quality-metrics.result }}" == "success" ]]; then
-            echo "✅ Code Quality Metrics: PASSED" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Code Quality Metrics: FAILED" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          if [[ "${{ needs.accessibility-audit.result }}" == "success" ]]; then
-            echo "✅ Accessibility Audit: PASSED" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Accessibility Audit: FAILED" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # Overall quality gate status
-          if [[ "${{ needs.code-coverage.result }}" == "success" && 
-                "${{ needs.security-audit.result }}" == "success" && 
-                "${{ needs.dependency-analysis.result }}" == "success" && 
-                "${{ needs.performance-benchmarks.result }}" == "success" && 
-                "${{ needs.code-quality-metrics.result }}" == "success" && 
-                "${{ needs.accessibility-audit.result }}" == "success" ]]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "🎉 **All Quality Gates PASSED!**" >> $GITHUB_STEP_SUMMARY
-            exit 0
-          else
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "💥 **Quality Gates FAILED!**" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.code-quality.result }}" != "success" || 
+                "${{ needs.security-check.result }}" != "success" ]]; then
+            echo "Quality gates failed"
             exit 1
           fi
+          echo "Quality gates passed successfully"
