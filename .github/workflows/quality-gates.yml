@@ -25,25 +25,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.11.0
-
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Install Playwright Browsers
-        run: pnpm exec playwright install --with-deps
+        run: npx playwright install --with-deps
 
       - name: Run tests with coverage
-        run: pnpm test -- --coverage --reporter=verbose
+        run: npm test -- --coverage --reporter=verbose
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -83,24 +78,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.11.0
-
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Run npm audit
         run: |
           echo "Running npm audit..."
-          pnpm audit --audit-level moderate --json > audit-results.json || true
+          npm audit --audit-level moderate --json > audit-results.json || true
           
           # Check if there are any moderate or higher vulnerabilities
           VULNERABILITIES=$(node -e "
@@ -139,24 +129,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.11.0
-
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Analyze bundle size
         run: |
           echo "Analyzing bundle sizes..."
-          pnpm run build:packages
+          npm run build:packages
           
           # Check for large bundle sizes
           find packages -name "dist" -type d | while read -r dist_dir; do
@@ -169,10 +154,10 @@ jobs:
       - name: Check for outdated dependencies
         run: |
           echo "Checking for outdated dependencies..."
-          pnpm outdated || true
+          npm outdated || true
           
           # Create report of outdated dependencies
-          pnpm outdated --json > outdated-deps.json || true
+          npm outdated --json > outdated-deps.json || true
 
       - name: License compliance check
         run: |
@@ -208,22 +193,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.11.0
-
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Build packages
-        run: pnpm run build:packages
+        run: npm run build:packages
 
       - name: Run performance benchmarks
         run: |
@@ -248,19 +228,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.11.0
-
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Run code complexity analysis
         run: |
@@ -313,22 +288,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.11.0
-
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Build examples
-        run: pnpm run build:examples
+        run: npm run build:examples
 
       - name: Run accessibility tests
         run: |
@@ -345,7 +315,7 @@ jobs:
     steps:
       - name: Quality Gate Results
         run: |
-          echo "## Quality Gate Results" >> $GITHUB_STEP_SUMMARY
+          echo "## Quality Gate Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           # Check each job result
@@ -384,38 +354,19 @@ jobs:
           else
             echo "❌ Accessibility Audit: FAILED" >> $GITHUB_STEP_SUMMARY
           fi
-
-      - name: Overall Quality Gate
-        run: |
-          # Determine if quality gate passes
-          REQUIRED_CHECKS=("code-coverage" "security-audit" "dependency-analysis")
-          FAILED_CHECKS=()
           
-          for check in "${REQUIRED_CHECKS[@]}"; do
-            case $check in
-              "code-coverage")
-                if [[ "${{ needs.code-coverage.result }}" != "success" ]]; then
-                  FAILED_CHECKS+=($check)
-                fi
-                ;;
-              "security-audit")
-                if [[ "${{ needs.security-audit.result }}" != "success" ]]; then
-                  FAILED_CHECKS+=($check)
-                fi
-                ;;
-              "dependency-analysis")
-                if [[ "${{ needs.dependency-analysis.result }}" != "success" ]]; then
-                  FAILED_CHECKS+=($check)
-                fi
-                ;;
-            esac
-          done
-          
-          if [ ${#FAILED_CHECKS[@]} -eq 0 ]; then
-            echo "🎉 Quality Gate: PASSED"
-            echo "All required quality checks have passed."
+          # Overall quality gate status
+          if [[ "${{ needs.code-coverage.result }}" == "success" && 
+                "${{ needs.security-audit.result }}" == "success" && 
+                "${{ needs.dependency-analysis.result }}" == "success" && 
+                "${{ needs.performance-benchmarks.result }}" == "success" && 
+                "${{ needs.code-quality-metrics.result }}" == "success" && 
+                "${{ needs.accessibility-audit.result }}" == "success" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🎉 **All Quality Gates PASSED!**" >> $GITHUB_STEP_SUMMARY
+            exit 0
           else
-            echo "❌ Quality Gate: FAILED"
-            echo "Failed checks: ${FAILED_CHECKS[*]}"
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "💥 **Quality Gates FAILED!**" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi

@@ -41,26 +41,21 @@ jobs:
         with:
           ref: ${{ inputs.version || github.sha }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.11.0
-
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Run tests
         if: inputs.run-tests
-        run: pnpm test
+        run: npm test
 
       - name: Build application
-        run: pnpm run build
+        run: npm run build
 
       - name: Validate deployment readiness
         id: checks
@@ -100,22 +95,17 @@ jobs:
         with:
           ref: ${{ inputs.version || github.sha }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.11.0
-
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Build for ${{ inputs.environment }}
-        run: pnpm run build
+        run: npm run build
         env:
           NODE_ENV: ${{ inputs.environment == 'production' && 'production' || 'staging' }}
           NEXT_PUBLIC_ENV: ${{ inputs.environment }}

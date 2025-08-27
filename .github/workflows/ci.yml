@@ -33,22 +33,17 @@ jobs:
           comment-summary-in-pr: always
           deny-licenses: GPL-2.0, GPL-3.0, LGPL-2.0, LGPL-3.0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.11.0
-
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Run npm audit
-        run: pnpm audit --audit-level moderate
+        run: npm audit --audit-level moderate
 
       - name: Run OSV Scanner
         uses: google/osv-scanner-action@v1
@@ -65,28 +60,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.11.0
-
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Run Prettier check
-        run: pnpm run prettier-check
+        run: npm run prettier-check
 
       - name: Run ESLint
-        run: pnpm run lint
+        run: npm run lint
 
       - name: Run Publint
-        run: pnpm run publint
+        run: npm run publint
 
   type-check:
     name: TypeScript Type Check
@@ -95,22 +85,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.11.0
-
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Run TypeScript type check
-        run: pnpm run type-check:full
+        run: npm run type-check:full
 
   test:
     name: Test Suite
@@ -122,25 +107,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.11.0
-
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Install Playwright Browsers
-        run: pnpm exec playwright install --with-deps
+        run: npx playwright install --with-deps
 
       - name: Run tests with coverage
-        run: pnpm test -- --coverage
+        run: npm test -- --coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -160,22 +140,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.11.0
-
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Build packages
-        run: pnpm run build:packages
+        run: npm run build:packages
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -194,19 +169,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.11.0
-
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -214,7 +184,7 @@ jobs:
           name: build-artifacts-${{ github.sha }}
 
       - name: Build examples
-        run: pnpm run build:examples
+        run: npm run build:examples
 
   ci-success:
     name: CI Success
