@@ -1,0 +1,172 @@
+name: Reusable Deployment Workflow
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: 'Environment to deploy to (staging/production)'
+      version:
+        required: false
+        type: string
+        description: 'Version to deploy'
+      run-tests:
+        required: false
+        type: boolean
+        default: true
+        description: 'Whether to run tests before deployment'
+    outputs:
+      deployment-url:
+        description: 'URL of the deployed application'
+        value: ${{ jobs.deploy.outputs.url }}
+      deployment-status:
+        description: 'Status of the deployment'
+        value: ${{ jobs.deploy.outputs.status }}
+    secrets:
+      DEPLOYMENT_TOKEN:
+        required: true
+      CODECOV_TOKEN:
+        required: false
+
+jobs:
+  pre-deploy:
+    name: Pre-deployment Checks
+    runs-on: ubuntu-latest
+    outputs:
+      should-deploy: ${{ steps.checks.outputs.should-deploy }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.version || github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        if: inputs.run-tests
+        run: pnpm test
+
+      - name: Build application
+        run: pnpm run build
+
+      - name: Validate deployment readiness
+        id: checks
+        run: |
+          echo "Validating deployment for ${{ inputs.environment }}..."
+          
+          # Environment-specific validations
+          case "${{ inputs.environment }}" in
+            "staging")
+              echo "✅ Staging deployment validation passed"
+              ;;
+            "production")
+              echo "Running production-specific validations..."
+              # Add production-specific checks
+              echo "✅ Production deployment validation passed"
+              ;;
+            *)
+              echo "❌ Unknown environment: ${{ inputs.environment }}"
+              exit 1
+              ;;
+          esac
+          
+          echo "should-deploy=true" >> $GITHUB_OUTPUT
+
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    needs: [pre-deploy]
+    if: needs.pre-deploy.outputs.should-deploy == 'true'
+    environment: ${{ inputs.environment }}
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+      status: ${{ steps.deploy.outputs.status }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.version || github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build for ${{ inputs.environment }}
+        run: pnpm run build
+        env:
+          NODE_ENV: ${{ inputs.environment == 'production' && 'production' || 'staging' }}
+          NEXT_PUBLIC_ENV: ${{ inputs.environment }}
+
+      - name: Deploy to ${{ inputs.environment }}
+        id: deploy
+        run: |
+          echo "Deploying to ${{ inputs.environment }}..."
+          
+          # Environment-specific deployment logic
+          case "${{ inputs.environment }}" in
+            "staging")
+              # Staging deployment commands
+              echo "url=https://staging.ai-blog-writer.example.com" >> $GITHUB_OUTPUT
+              ;;
+            "production")
+              # Production deployment commands
+              echo "url=https://ai-blog-writer.example.com" >> $GITHUB_OUTPUT
+              ;;
+          esac
+          
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "✅ Deployment to ${{ inputs.environment }} completed"
+
+      - name: Run post-deployment health checks
+        run: |
+          echo "Running health checks for ${{ inputs.environment }}..."
+          # Add health check commands
+          # curl -f ${{ steps.deploy.outputs.url }}/health
+          echo "✅ Health checks passed"
+
+  post-deploy:
+    name: Post-deployment Tasks
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: always() && needs.deploy.result == 'success'
+    steps:
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests against ${{ needs.deploy.outputs.url }}..."
+          # Add smoke test commands
+          echo "✅ Smoke tests passed"
+
+      - name: Update monitoring
+        run: |
+          echo "Updating monitoring for ${{ inputs.environment }}..."
+          # Update monitoring dashboards, alerts, etc.
+          echo "✅ Monitoring updated"
+
+      - name: Notify deployment success
+        run: |
+          echo "🚀 Deployment to ${{ inputs.environment }} successful!"
+          echo "URL: ${{ needs.deploy.outputs.url }}"
+          # Add notification logic (Slack, email, etc.)

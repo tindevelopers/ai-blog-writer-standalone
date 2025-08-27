@@ -1,0 +1,26 @@
+# Global owners
+* @tindevelopers
+
+# Workflow and CI/CD files
+/.github/ @tindevelopers
+/docker/ @tindevelopers
+
+# Core packages
+/packages/ai/ @tindevelopers
+/packages/core/ @tindevelopers
+
+# Examples and documentation
+/examples/ @tindevelopers
+/content/ @tindevelopers
+/README.md @tindevelopers
+
+# Configuration files
+package.json @tindevelopers
+turbo.json @tindevelopers
+tsconfig*.json @tindevelopers
+pnpm-*.yaml @tindevelopers
+
+# Security and compliance
+/SECURITY.md @tindevelopers
+/LICENSE @tindevelopers
+/.github/dependabot.yml @tindevelopers

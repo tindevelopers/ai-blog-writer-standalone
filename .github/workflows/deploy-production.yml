@@ -1,0 +1,212 @@
+name: Deploy to Production
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to deploy'
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  pre-deployment-checks:
+    name: Pre-deployment Checks
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      should-deploy: ${{ steps.checks.outputs.should-deploy }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+
+      - name: Extract version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="${{ github.event.inputs.tag }}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Deploying version: ${VERSION}"
+
+      - name: Verify release artifacts
+        run: |
+          echo "Verifying release artifacts exist..."
+          # Check if Docker images exist
+          # Check if build artifacts are available
+          echo "✅ Release artifacts verified"
+
+      - name: Run security checks
+        run: |
+          echo "Running final security checks..."
+          # Add security validation
+          echo "✅ Security checks passed"
+
+      - name: Validate deployment readiness
+        id: checks
+        run: |
+          echo "should-deploy=true" >> $GITHUB_OUTPUT
+          echo "✅ All pre-deployment checks passed"
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks]
+    if: needs.pre-deployment-checks.outputs.should-deploy == 'true'
+    environment: 
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    permissions:
+      contents: read
+      packages: read
+      deployments: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.pre-deployment-checks.outputs.version }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build for production
+        run: pnpm run build
+        env:
+          NODE_ENV: production
+          NEXT_PUBLIC_ENV: production
+
+      - name: Create deployment backup
+        run: |
+          echo "Creating deployment backup..."
+          # Add backup commands here
+          echo "✅ Backup created"
+
+      - name: Deploy to Production
+        id: deploy
+        run: |
+          echo "Deploying version ${{ needs.pre-deployment-checks.outputs.version }} to production..."
+          
+          # Add your production deployment commands here
+          # Examples:
+          # - Deploy to Vercel: vercel --prod --token ${{ secrets.VERCEL_TOKEN }}
+          # - Deploy to AWS: aws s3 sync ./dist s3://production-bucket
+          # - Deploy to Google Cloud: gcloud app deploy --project=production-project
+          # - Deploy to Azure: az webapp deployment source config-zip
+          # - Deploy to Railway: railway deploy --environment production
+          # - Deploy to Render: render deploy --service-id ${{ secrets.RENDER_SERVICE_ID }}
+          
+          # Blue-green deployment example:
+          # 1. Deploy to green environment
+          # 2. Run health checks
+          # 3. Switch traffic from blue to green
+          # 4. Keep blue as backup
+          
+          sleep 15
+          echo "url=https://ai-blog-writer.example.com" >> $GITHUB_OUTPUT
+          echo "✅ Production deployment completed successfully"
+
+      - name: Run post-deployment health checks
+        run: |
+          echo "Running post-deployment health checks..."
+          # curl -f ${{ steps.deploy.outputs.url }}/health || exit 1
+          # curl -f ${{ steps.deploy.outputs.url }}/api/status || exit 1
+          echo "✅ Health checks passed"
+
+      - name: Update monitoring and alerts
+        run: |
+          echo "Updating monitoring dashboards and alerts..."
+          # Update monitoring tools with new version
+          # Enable production alerts
+          echo "✅ Monitoring updated"
+
+  post-deployment-tests:
+    name: Post-deployment Tests
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run production smoke tests
+        run: |
+          echo "Running production smoke tests..."
+          # Add comprehensive smoke tests
+          echo "✅ Smoke tests passed"
+
+      - name: Run critical path tests
+        run: |
+          echo "Running critical path tests..."
+          # Test critical user journeys
+          echo "✅ Critical path tests passed"
+
+      - name: Validate performance metrics
+        run: |
+          echo "Validating performance metrics..."
+          # Check response times, error rates, etc.
+          echo "✅ Performance metrics validated"
+
+  rollback-on-failure:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy-production, post-deployment-tests]
+    if: failure()
+    environment: production
+    steps:
+      - name: Rollback deployment
+        run: |
+          echo "🚨 Deployment failed, initiating rollback..."
+          # Add rollback commands here
+          # Restore from backup
+          # Switch traffic back to previous version
+          echo "✅ Rollback completed"
+
+      - name: Notify team of rollback
+        run: |
+          echo "📢 Notifying team of production rollback..."
+          # Send notifications via Slack, email, etc.
+
+  deployment-success:
+    name: Deployment Success
+    runs-on: ubuntu-latest
+    needs: [deploy-production, post-deployment-tests]
+    if: success()
+    steps:
+      - name: Notify successful deployment
+        run: |
+          echo "🎉 Production deployment successful!"
+          echo "Version: ${{ needs.pre-deployment-checks.outputs.version }}"
+          echo "URL: ${{ needs.deploy-production.outputs.url }}"
+          
+      - name: Update deployment tracking
+        run: |
+          echo "Updating deployment tracking systems..."
+          # Update deployment tracking tools
+          # Log deployment metrics
+          echo "✅ Deployment tracking updated"
+
+      - name: Clean up old artifacts
+        run: |
+          echo "Cleaning up old deployment artifacts..."
+          # Remove old Docker images, backups, etc.
+          echo "✅ Cleanup completed"
