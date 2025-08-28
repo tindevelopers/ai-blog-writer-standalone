@@ -37,7 +37,7 @@ jobs:
       should-deploy: ${{ steps.checks.outputs.should-deploy }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ inputs.version || github.sha }}
 
@@ -91,7 +91,7 @@ jobs:
       status: ${{ steps.deploy.outputs.status }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ inputs.version || github.sha }}
 
